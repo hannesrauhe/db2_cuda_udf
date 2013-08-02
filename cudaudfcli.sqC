@@ -1,0 +1,176 @@
+#include <string.h>
+#include <stdio.h>
+#include <sqlenv.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char name[15];
+  char job[15];
+  double salary;
+  double newSalary;
+  sqlint32 counter;
+  char empno[7];
+  char resume_format[7];
+  sqlint32 numWords;
+  double comm;
+  short salaryInd;
+  sqlint32 maxCustNum;
+  char strStmt[256];
+  char fname[200];    
+  SQL TYPE IS CLOB (200000) clobFile;      
+  short clobInd;
+EXEC SQL END DECLARE SECTION;
+
+class UdfCli
+{
+  public:
+    // scalar UDFs
+    int ExternalScalarUDFUse();
+};
+
+int UdfCli::ExternalScalarUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "TO WORK WITH SCALAR UDF:" << endl;
+
+  // drop scalar UDF, if exists
+  cout << "\n  DROP the scalar UDF, if exists." << endl;
+
+  EXEC SQL DROP FUNCTION ScalarCUDAUDF;
+
+  // register scalar UDF
+  cout << "\n  Register the scalar CUDA UDF." << endl;
+
+  EXEC SQL CREATE FUNCTION
+    ScalarCUDAUDF(CHAR(5), DOUBLE)
+    RETURNS DOUBLE
+    EXTERNAL NAME 'cudaudfsrv!ScalarCUDAUDF'
+    FENCED
+    CALLED ON NULL INPUT
+    NOT VARIANT
+    NO SQL
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use scalar UDF
+  cout << "\n  Use the scalar UDF:" << endl;
+  cout << "    SELECT name, job, salary, ScalarCUDAUDF(job, salary)" << endl;
+  cout << "      FROM staff" << endl;
+  cout << "      WHERE name LIKE 'S%'" << endl;
+
+  strcpy(strStmt, "SELECT name, job, salary, ScalarCUDAUDF(job, salary) "
+                  "  FROM staff "
+                  "  WHERE name LIKE 'S%' ");
+
+  EXEC SQL PREPARE stmt1 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c1 CURSOR FOR stmt1;
+
+  // open cursor
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and dispaly." << endl;
+  cout << "    NAME       JOB     SALARY   NEW_SALARY" << endl;
+  cout << "    ---------- ------- -------- ----------" << endl;
+
+  EXEC SQL FETCH c1 INTO :name, :job, :salary, :newSalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::left, ios::adjustfield);
+    cout << "    " << setw(10) << name << " " << setw(7) << job;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(7) << salary << " " << setw(7) << newSalary << endl;
+
+    EXEC SQL FETCH c1 INTO :name, :job, :salary, :newSalary;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+/*
+  // drop scalar UDF
+  cout << "\n  DROP the scalar CUDA UDF." << endl;
+
+  EXEC SQL DROP FUNCTION ScalarCUDAUDF;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+*/
+
+  EXEC SQL COMMIT;
+  cout << "\n  COMMIT." << endl;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::ExternalScalarUDFUse
+
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  UdfCli cli;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout.setf(ios::fixed, ios::floatfield);
+  cout << setprecision(2);
+  cout << "\nTHIS SAMPLE SHOWS HOW TO WORK WITH UDFs." << endl;
+
+  // database -- connect
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // scalar UDFs
+  rc = cli.ExternalScalarUDFUse();
+
+  // database -- disconnect
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

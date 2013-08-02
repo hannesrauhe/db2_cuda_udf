@@ -1,0 +1,101 @@
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sqlenv.h>
+#include "utilemb.h"
+#include <sys/types.h>  /* open() */
+#include <sys/stat.h>
+#include <fcntl.h>
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std;
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+/*---< file_read() >---------------------------------------------------------*/
+float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
+                  char *filename,      /* input file name */
+                  int  *numObjs,       /* no. data objects (local) */
+                  int  *numCoords)     /* no. coordinates */
+{
+    float **objects;
+    int     i, j, len;
+    ssize_t numBytesRead;
+
+    if (isBinaryFile) {  /* input file is in raw binary format -------------*/
+        int infile;
+        if ((infile = open(filename, O_RDONLY, "0600")) == -1) {
+            fprintf(stderr, "Error: no such file (%s)\n", filename);
+            return NULL;
+        }
+        numBytesRead = read(infile, numObjs,    sizeof(int));
+//        assert(numBytesRead == sizeof(int));
+        numBytesRead = read(infile, numCoords, sizeof(int));
+//        assert(numBytesRead == sizeof(int));
+
+        /* allocate space for objects[][] and read all objects */
+        len = (*numObjs) * (*numCoords);
+        objects    = (float**)malloc((*numObjs) * sizeof(float*));
+//        assert(objects != NULL);
+        objects[0] = (float*) malloc(len * sizeof(float));
+//        assert(objects[0] != NULL);
+        for (i=1; i<(*numObjs); i++)
+            objects[i] = objects[i-1] + (*numCoords);
+
+        numBytesRead = read(infile, objects[0], len*sizeof(float));
+//        assert(numBytesRead == len*sizeof(float));
+
+        close(infile);
+    }
+
+    return objects;
+}
+
+int main(int argc, char **argv) {
+	int     numClusters, numCoords, numObjs;
+	float** objects;
+	DbEmb db;
+	struct sqlca sqlca;
+
+	if(argc<2) {
+		printf("USAGE: %s <filename>\n",argv[0]);
+		return -1;
+	}
+	objects = file_read(1, argv[1], &numObjs, &numCoords);
+
+	if(numCoords!=9) {
+		printf("Wrong number of coords in file\n");
+		return -1;
+	}
+	
+	db.setDb("kmeans", "", "");
+
+	db.Connect();
+	EXEC SQL DROP TABLE colors;
+
+	  // register scalar UDF
+	cout << "\n  Register table." << endl;
+
+	  EXEC SQL CREATE TABLE
+	    COLORS(C1 REAL,C2 REAL,C3 REAL,C4 REAL,C5 REAL,C6 REAL,C7 REAL,C8 REAL,C9 REAL);
+	  EMB_SQL_CHECK("create table");
+
+	char strStmt[1000];  
+	for(int i=0;i<numObjs;++i) {
+		sprintf(strStmt, "INSERT INTO colors VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
+															objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
+															objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
+		EXEC SQL EXECUTE IMMEDIATE :strStmt;
+	}
+	EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
+	
+	cout << "\n  COMMIT.\n";
+	
+	EXEC SQL COMMIT;
+
+	db.Disconnect();
+}
