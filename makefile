@@ -1,6 +1,6 @@
 DB2PATH=$(HOME)/sqllib
 
-all: cudaudfsrv cudaudfcli
+all: cudaudfsrv cudaudfcli readcolordata
 
 cudaudfsrv: cudaudfsrv.o
 	g++ -m64 -shared -o cudaudfsrv cudaudfsrv.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2 -lpthread
@@ -21,8 +21,8 @@ install: cudaudfsrv
 readcolordata: utilemb.sqC readcolordata.sqC
 	./embprep utilemb kmeans
 	./embprep readcolordata kmeans
-	g++ -m64 -I$(DB2PATH)/include -c readcolordata.C
-	g++ -Wl,-rpath,$(DB2PATH)/lib64 -I$(DB2PATH)/include -c utilemb.C
+	g++ -m64 -I$(DB2PATH)/include -c readcolordata.C -Wno-write-strings
+	g++ -Wl,-rpath,$(DB2PATH)/lib64 -I$(DB2PATH)/include -c utilemb.C -Wno-write-strings
 	g++ -Wl,-rpath,$(DB2PATH)/lib64 -o readcolordata readcolordata.o utilemb.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2	
 	
 clean:

@@ -16,6 +16,8 @@
    #include <iostream.h>
 #endif
 
+#include <locale>
+
 /*---< file_read() >---------------------------------------------------------*/
 float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
                   char *filename,      /* input file name */
@@ -60,6 +62,11 @@ int main(int argc, char **argv) {
 	float** objects;
 	DbEmb db;
 	struct sqlca sqlca;
+	
+	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
+	setlocale(LC_ALL, "");
+	setlocale(LC_NUMERIC, "en_US.UTF-8");
+	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
 
 	if(argc<2) {
 		printf("USAGE: %s <filename>\n",argv[0]);
@@ -77,7 +84,6 @@ int main(int argc, char **argv) {
 	db.Connect();
 	EXEC SQL DROP TABLE colors;
 
-	  // register scalar UDF
 	cout << "\n  Register table." << endl;
 
 	  EXEC SQL CREATE TABLE
@@ -86,9 +92,12 @@ int main(int argc, char **argv) {
 
 	char strStmt[1000];  
 	for(int i=0;i<numObjs;++i) {
-		sprintf(strStmt, "INSERT INTO colors VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
+		sprintf(strStmt, "INSERT INTO colors(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
 															objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
 															objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
+		if(!i) {		
+			printf("executing %d statements such as this:\n %s\n",numObjs,strStmt);
+		}
 		EXEC SQL EXECUTE IMMEDIATE :strStmt;
 	}
 	EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
