@@ -5,6 +5,8 @@
 #include <sqludf.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>     /* read(), close() */
 
   #define PATH_SEP "/"
 
@@ -134,6 +136,45 @@ void SQL_API_FN TableTestUDF(// Return row fields
 
 
 /*** kmeans ***/
+
+float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
+                  char *filename,      /* input file name */
+                  int  *numObjs,       /* no. data objects (local) */
+                  int  *numCoords)     /* no. coordinates */
+{
+    float **objects;
+    int     i, j, len;
+    ssize_t numBytesRead;
+
+    if (isBinaryFile) {  /* input file is in raw binary format -------------*/
+        int infile;
+        if ((infile = open(filename, O_RDONLY, "0600")) == -1) {
+            fprintf(stderr, "Error: no such file (%s)\n", filename);
+            return NULL;
+        }
+        numBytesRead = read(infile, numObjs,    sizeof(int));
+//        assert(numBytesRead == sizeof(int));
+        numBytesRead = read(infile, numCoords, sizeof(int));
+//        assert(numBytesRead == sizeof(int));
+
+        /* allocate space for objects[][] and read all objects */
+        len = (*numObjs) * (*numCoords);
+        objects    = (float**)malloc((*numObjs) * sizeof(float*));
+//        assert(objects != NULL);
+        objects[0] = (float*) malloc(len * sizeof(float));
+//        assert(objects[0] != NULL);
+        for (i=1; i<(*numObjs); i++)
+            objects[i] = objects[i-1] + (*numCoords);
+
+        numBytesRead = read(infile, objects[0], len*sizeof(float));
+//        assert(numBytesRead == len*sizeof(float));
+
+        close(infile);
+    }
+
+    return objects;
+}
+
 /*----< euclid_dist_2() >----------------------------------------------------*/
 /* square of Euclid distance between two multi-dimensional points            */
 __inline static
@@ -195,9 +236,7 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     /* allocate a 2D space for returning variable clusters[] (coordinates
        of cluster centers) */
     clusters    = (float**) malloc(numClusters *             sizeof(float*));
-    assert(clusters != NULL);
     clusters[0] = (float*)  malloc(numClusters * numCoords * sizeof(float));
-    assert(clusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         clusters[i] = clusters[i-1] + numCoords;
 
@@ -211,12 +250,9 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     /* need to initialize newClusterSize and newClusters[0] to all 0 */
     newClusterSize = (int*) calloc(numClusters, sizeof(int));
-    assert(newClusterSize != NULL);
 
     newClusters    = (float**) malloc(numClusters *            sizeof(float*));
-    assert(newClusters != NULL);
     newClusters[0] = (float*)  calloc(numClusters * numCoords, sizeof(float));
-    assert(newClusters[0] != NULL);
     for (i=1; i<numClusters; i++)
         newClusters[i] = newClusters[i-1] + numCoords;
 
@@ -261,4 +297,118 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
     return clusters;
 }
 
+struct kmeans_scratch
+{
+  float** clusters;
+  int* membership;
+  int numClusters, numObjs, numCoords;
+  int result_pos;
+};
 
+
+/*
+CREATE FUNCTION KMEANSCOLORUDF(TABLE LIKE COLORS AS LOCATOR)
+RETURNS TABLE(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)
+EXTERNAL NAME 'cudaudfsrv!kmeansColorUDF'
+DETERMINISTIC
+NO EXTERNAL ACTION
+FENCED
+NOT NULL CALL
+LANGUAGE C
+PARAMETER STYLE DB2SQL
+NO SQL
+SCRATCHPAD
+FINAL CALL
+DISALLOW PARALLEL
+DBINFO
+ */
+#ifdef __cplusplus
+extern "C"
+#endif
+void SQL_API_FN kmeansColorUDF(// Return row fields
+						 SQLUDF_LOCATOR *inColorTable,
+						 //out:
+                         SQLUDF_DOUBLE *C1,
+                         SQLUDF_DOUBLE *C2,
+                         SQLUDF_DOUBLE *C3,
+                         SQLUDF_DOUBLE *C4,
+                         SQLUDF_DOUBLE *C5,
+                         SQLUDF_DOUBLE *C6,
+                         SQLUDF_DOUBLE *C7,
+                         SQLUDF_DOUBLE *C8,
+                         SQLUDF_DOUBLE *C9,
+                         // Return row field null indicators
+                         SQLUDF_SMALLINT *ColorNullInd,
+                         SQLUDF_SMALLINT *C1NullInd,
+                         SQLUDF_SMALLINT *C2NullInd,
+                         SQLUDF_SMALLINT *C3NullInd,
+                         SQLUDF_SMALLINT *C4NullInd,
+                         SQLUDF_SMALLINT *C5NullInd,
+                         SQLUDF_SMALLINT *C6NullInd,
+                         SQLUDF_SMALLINT *C7NullInd,
+                         SQLUDF_SMALLINT *C8NullInd,
+                         SQLUDF_SMALLINT *C9NullInd,
+                         SQLUDF_TRAIL_ARGS_ALL)
+{
+  struct kmeans_scratch *pScratArea;
+  pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
+
+  // SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are
+  // parts of SQLUDF_TRAIL_ARGS_ALL
+  switch (SQLUDF_CALLT)
+  {
+    case SQLUDF_TF_OPEN:
+    {
+    	int     loop_iterations = 0;
+    	float   threshold = 0.001;
+    	float **objects;
+		struct sqlca sqlca;
+
+		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/colors17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
+		pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
+		pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+	    		pScratArea->membership, &loop_iterations);
+
+		free(objects[0]);
+		free(objects);
+		/* Error Handling
+		if(numCoords!=9) {
+			printf("Wrong number of coords in file\n");
+			return -1;
+		}
+		*/
+		pScratArea->result_pos = 0;
+		break;
+    }
+    case SQLUDF_TF_FETCH:
+
+      // Normal call UDF: Fetch next row
+      if (pScratArea->result_pos == pScratArea->numClusters)
+      {
+        // SQLUDF_STATE is part of SQLUDF_TRAIL_ARGS_ALL
+        strcpy(SQLUDF_STATE, "02000");
+        break;
+      }
+      *C1 = (double)pScratArea->clusters[pScratArea->result_pos][1];
+      *C2 = (double)pScratArea->clusters[pScratArea->result_pos][2];
+      *C3 = (double)pScratArea->clusters[pScratArea->result_pos][3];
+      *C4 = (double)pScratArea->clusters[pScratArea->result_pos][4];
+      *C5 = (double)pScratArea->clusters[pScratArea->result_pos][5];
+      *C6 = (double)pScratArea->clusters[pScratArea->result_pos][6];
+      *C7 = (double)pScratArea->clusters[pScratArea->result_pos][7];
+      *C8 = (double)pScratArea->clusters[pScratArea->result_pos][8];
+      *C9 = (double)pScratArea->clusters[pScratArea->result_pos][9];
+
+      // Next row of data
+      pScratArea->result_pos++;
+      strcpy(SQLUDF_STATE, "00000");
+      break;
+    case SQLUDF_TF_CLOSE:
+        free(pScratArea->membership);
+        free(pScratArea->clusters[0]);
+        free(pScratArea->clusters);
+      break;
+    case SQLUDF_TF_FINAL:
+      break;
+  }
+} //kmeansColorUDF

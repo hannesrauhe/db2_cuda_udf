@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
 	cout << "\n  Register table." << endl;
 
 	  EXEC SQL CREATE TABLE
-	    COLORS(C1 REAL,C2 REAL,C3 REAL,C4 REAL,C5 REAL,C6 REAL,C7 REAL,C8 REAL,C9 REAL);
+	    COLORS(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE);
 	  EMB_SQL_CHECK("create table");
 
 	char strStmt[1000];  
