@@ -216,6 +216,16 @@ int find_nearest_cluster(int     numClusters, /* no. clusters */
     return(index);
 }
 
+float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
+                   int     numCoords,    /* no. features */
+                   int     numObjs,      /* no. objects */
+                   int     numClusters,  /* no. clusters */
+                   float   threshold,    /* % objects change membership */
+                   int    *membership,   /* out: [numObjs] */
+                   int    *loop_iterations);
+
+int cuda_test();
+
 /*----< seq_kmeans() >-------------------------------------------------------*/
 /* return an array of cluster centers of size [numClusters][numCoords]       */
 float** seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
@@ -307,7 +317,9 @@ struct kmeans_scratch
 
 
 /*
-CREATE FUNCTION KMEANSCOLORUDF(TABLE LIKE COLORS AS LOCATOR)
+DROP Function KMEANSCOLORUDF;
+
+CREATE FUNCTION KMEANSCOLORUDF(NUMCLUSTERS SMALLINT, DEVICE CHAR(3))
 RETURNS TABLE(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)
 EXTERNAL NAME 'cudaudfsrv!kmeansColorUDF'
 DETERMINISTIC
@@ -320,13 +332,19 @@ NO SQL
 SCRATCHPAD
 FINAL CALL
 DISALLOW PARALLEL
-DBINFO
+DBINFO;
+
+select * from TABLE(KMEANSCOLORUDF(8, "CPU"));
+
+select * from TABLE(KMEANSCOLORUDF(8, "GPU"));
  */
 #ifdef __cplusplus
 extern "C"
 #endif
 void SQL_API_FN kmeansColorUDF(// Return row fields
-						 SQLUDF_LOCATOR *inColorTable,
+						 //SQLUDF_LOCATOR *inColorTable,
+						 SQLUDF_SMALLINT *numClusters,
+						 SQLUDF_CHAR *device,
 						 //out:
                          SQLUDF_DOUBLE *C1,
                          SQLUDF_DOUBLE *C2,
@@ -352,6 +370,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 {
   struct kmeans_scratch *pScratArea;
   pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
+//  const char* device = "CPU";
 
   // SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are
   // parts of SQLUDF_TRAIL_ARGS_ALL
@@ -364,13 +383,30 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
     	float **objects;
 		struct sqlca sqlca;
 
-		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/colors17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
-		pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
-		pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-	    		pScratArea->membership, &loop_iterations);
+		pScratArea->numClusters = *numClusters;
 
-		free(objects[0]);
-		free(objects);
+		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/color17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
+		if(objects==NULL || objects[0]==NULL) {
+			strcpy(SQLUDF_STATE, "38999");
+			strcpy(SQLUDF_MSGTX, "OPENING FILE ERROR");
+		} else {
+			pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
+			if (strcmp(device, "GPU") == 0) {
+				pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+								pScratArea->membership, &loop_iterations);
+			} else {
+				pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+								pScratArea->membership, &loop_iterations);
+			}
+
+//		    pScratArea->clusters[0][0] = cuda_test();
+			free(objects[0]);
+			free(objects);
+			if(pScratArea->clusters==NULL) {
+				strcpy(SQLUDF_STATE, "38998");
+				strcpy(SQLUDF_MSGTX, "KMEANS ERROR");
+			}
+		}
 		/* Error Handling
 		if(numCoords!=9) {
 			printf("Wrong number of coords in file\n");
@@ -381,32 +417,45 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 		break;
     }
     case SQLUDF_TF_FETCH:
-
-      // Normal call UDF: Fetch next row
-      if (pScratArea->result_pos == pScratArea->numClusters)
+      if (pScratArea->result_pos >= pScratArea->numClusters)
       {
         // SQLUDF_STATE is part of SQLUDF_TRAIL_ARGS_ALL
         strcpy(SQLUDF_STATE, "02000");
         break;
       }
-      *C1 = (double)pScratArea->clusters[pScratArea->result_pos][1];
-      *C2 = (double)pScratArea->clusters[pScratArea->result_pos][2];
-      *C3 = (double)pScratArea->clusters[pScratArea->result_pos][3];
-      *C4 = (double)pScratArea->clusters[pScratArea->result_pos][4];
-      *C5 = (double)pScratArea->clusters[pScratArea->result_pos][5];
-      *C6 = (double)pScratArea->clusters[pScratArea->result_pos][6];
-      *C7 = (double)pScratArea->clusters[pScratArea->result_pos][7];
-      *C8 = (double)pScratArea->clusters[pScratArea->result_pos][8];
-      *C9 = (double)pScratArea->clusters[pScratArea->result_pos][9];
-
+      // Normal call UDF: Fetch next row
+      *C1 = (double)pScratArea->clusters[pScratArea->result_pos][0];
+      *C2 = (double)pScratArea->clusters[pScratArea->result_pos][1];
+      *C3 = (double)pScratArea->clusters[pScratArea->result_pos][2];
+      *C4 = (double)pScratArea->clusters[pScratArea->result_pos][3];
+      *C5 = (double)pScratArea->clusters[pScratArea->result_pos][4];
+      *C6 = (double)pScratArea->clusters[pScratArea->result_pos][5];
+      *C7 = (double)pScratArea->clusters[pScratArea->result_pos][6];
+      *C8 = (double)pScratArea->clusters[pScratArea->result_pos][7];
+      *C9 = (double)pScratArea->clusters[pScratArea->result_pos][8];
+/*
+    	if(pScratArea->result_pos>=1) {
+    	      strcpy(SQLUDF_STATE, "02000");
+    		break;
+    	}
+        *C1 = pScratArea->numObjs;
+        *C2 = pScratArea->numClusters;
+        *C3 = pScratArea->numCoords;
+        *C4 = 0;
+        *C5 =0;
+        *C6 = 0;
+        *C7 = 0;
+        *C8 = 0;
+        *C9 = 0;*/
       // Next row of data
       pScratArea->result_pos++;
       strcpy(SQLUDF_STATE, "00000");
       break;
     case SQLUDF_TF_CLOSE:
+    	/*
         free(pScratArea->membership);
         free(pScratArea->clusters[0]);
-        free(pScratArea->clusters);
+        free(pScratArea->clusters);*/
       break;
     case SQLUDF_TF_FINAL:
       break;

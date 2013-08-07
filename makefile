@@ -2,11 +2,14 @@ DB2PATH=$(HOME)/sqllib
 
 all: cudaudfsrv cudaudfcli readcolordata
 
-cudaudfsrv: cudaudfsrv.o
-	g++ -m64 -shared -o cudaudfsrv cudaudfsrv.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2 -lpthread
-	
+cudaudfsrv: cudaudfsrv.o cuda_kmeans.o
+	#g++ -m64 -shared -o cudaudfsrv cudaudfsrv.o cuda_kmeans.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2 -lpthread
+	/usr/local/cuda/bin/nvcc  -o cudaudfsrv cudaudfsrv.o cuda_kmeans.o  -L$(DB2PATH)/lib64 -ldb2 -lpthread --shared -m64 -Xlinker=-rpath,$(DB2PATH)/lib64
 cudaudfsrv.o: cudaudfsrv.C
 	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c cudaudfsrv.C -D_REENTRANT
+	
+cuda_kmeans.o: cuda_kmeans.cu
+	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu
 
 cudaudfcli: utilemb.sqC cudaudfcli.sqC
 	./embprep utilemb
