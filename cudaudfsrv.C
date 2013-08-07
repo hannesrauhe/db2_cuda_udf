@@ -319,7 +319,7 @@ struct kmeans_scratch
 /*
 DROP Function KMEANSCOLORUDF;
 
-CREATE FUNCTION KMEANSCOLORUDF(NUMCLUSTERS SMALLINT)
+CREATE FUNCTION KMEANSCOLORUDF(NUMCLUSTERS SMALLINT, DEVICE CHAR(3))
 RETURNS TABLE(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)
 EXTERNAL NAME 'cudaudfsrv!kmeansColorUDF'
 DETERMINISTIC
@@ -334,14 +334,15 @@ FINAL CALL
 DISALLOW PARALLEL
 DBINFO
 
-select * from TABLE(KMEANSCOLORUDF(8));
+select * from TABLE(KMEANSCOLORUDF(8,'CPU'));
  */
 #ifdef __cplusplus
 extern "C"
 #endif
 void SQL_API_FN kmeansColorUDF(// Return row fields
 						 //SQLUDF_LOCATOR *inColorTable,
-						 SQLUDF_SMALLINT *dummy,
+						 SQLUDF_SMALLINT *numClusters,
+						 SQLUDF_CHAR *device,
 						 //out:
                          SQLUDF_DOUBLE *C1,
                          SQLUDF_DOUBLE *C2,
@@ -354,6 +355,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
                          SQLUDF_DOUBLE *C9,
                          // Return row field null indicators
                          SQLUDF_SMALLINT *ColorNullInd,
+                         SQLUDF_SMALLINT *deviceNullInd,
                          SQLUDF_SMALLINT *C1NullInd,
                          SQLUDF_SMALLINT *C2NullInd,
                          SQLUDF_SMALLINT *C3NullInd,
@@ -367,6 +369,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 {
   struct kmeans_scratch *pScratArea;
   pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
+//  const char* device = "CPU";
 
   // SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are
   // parts of SQLUDF_TRAIL_ARGS_ALL
@@ -379,7 +382,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
     	float **objects;
 		struct sqlca sqlca;
 
-		pScratArea->numClusters = *dummy;
+		pScratArea->numClusters = *numClusters;
 
 		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/color17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
 		if(objects==NULL || objects[0]==NULL) {
@@ -387,12 +390,16 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 			strcpy(SQLUDF_MSGTX, "OPENING FILE ERROR");
 		} else {
 			pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
-//			pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-//					pScratArea->membership, &loop_iterations);
-			pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-								pScratArea->membership, &loop_iterations);
 
-//		    pScratArea->clusters[0][0] = cuda_test();
+			if(strcmp(device,"GPU") == 0) {
+				pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+								pScratArea->membership, &loop_iterations);
+//				pScratArea->clusters[0][0] = cuda_test();
+			} else {
+				pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+						pScratArea->membership, &loop_iterations);
+			}
+
 			free(objects[0]);
 			free(objects);
 			if(pScratArea->clusters==NULL) {
