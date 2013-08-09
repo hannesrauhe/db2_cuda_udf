@@ -377,7 +377,3 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
 
     return clusters;
 }
-
-int cuda_test() {
-	return 42;
-}
