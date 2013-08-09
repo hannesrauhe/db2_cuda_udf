@@ -3,10 +3,6 @@
 #include <stdlib.h>
 #include <sqlca.h>
 #include <sqludf.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <unistd.h>     /* read(), close() */
 
 
 float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
@@ -92,6 +88,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 {
   struct kmeans_scratch *pScratArea;
   pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
+  pScratArea->numCoords = 9;
 //  const char* device = "CPU";
 
   // SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are
@@ -100,29 +97,74 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
   {
     case SQLUDF_TF_OPEN:
     {
-    	int     loop_iterations = 0;
-    	float   threshold = 0.001;
-    	float **objects;
+		int     loop_iterations = 0;
+		float   threshold = 0.001;
+		float **objects;
 		struct sqlca sqlca;
-
+		
+		
 		pScratArea->numClusters = *numClusters;
+		EXEC SQL BEGIN DECLARE SECTION;
+			   int count;
+			   short countInd;
+			   double c1;
+			   short c1Ind;
+			   double c2;
+			   short c2Ind;
+			   double c3;
+			   short c3Ind;
+			   double c4;
+			   short c4Ind;
+			   double c5;
+			   short c5Ind;
+			   double c6;
+			   short c6Ind;
+			   double c7;
+			   short c7Ind;
+			   double c8;
+			   short c8Ind;
+			   double c9;
+			   short c9Ind;
+		EXEC SQL END DECLARE SECTION;
+		
+		EXEC SQL DECLARE c40 CURSOR FOR
+			SELECT COUNT(*) AS count
+			FROM COLORS;
+		
+		EXEC SQL OPEN c40;
+		if (sqlca.sqlcode != 0) {
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Open count cursor falied with SQLCODE = %d.",  SQLCODE);
+		   return;
+		}
+		
+		EXEC SQL FETCH c40 INTO :count :countInd;
+		if (sqlca.sqlcode != 0) {
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Fetch Count falied with SQLCODE = %d.",  SQLCODE);
+		   return;
+		}
+		EXEC SQL CLOSE c40;
+		pScratArea->numObjs = count;
+		objects    = (float**)malloc(pScratArea->numObjs * sizeof(float*));
+		objects[0] = (float*) malloc(pScratArea->numObjs * pScratArea->numCoords * sizeof(float));
 
-		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/color17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
+//		objects = file_read(1, "/home/db2inst1/workspace/db2CudaUDF/color17695.bin", &(pScratArea->numObjs), &(pScratArea->numCoords));
 		if(objects==NULL || objects[0]==NULL) {
 			strcpy(SQLUDF_STATE, "38999");
 			strcpy(SQLUDF_MSGTX, "OPENING FILE ERROR");
 		} else {
 			pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
-
+		
 			if(strcmp(device,"GPU") == 0) {
 				pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
 								pScratArea->membership, &loop_iterations);
-//				pScratArea->clusters[0][0] = cuda_test();
+		//				pScratArea->clusters[0][0] = cuda_test();
 			} else {
 				pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
 						pScratArea->membership, &loop_iterations);
 			}
-
+		
 			free(objects[0]);
 			free(objects);
 			if(pScratArea->clusters==NULL) {
@@ -130,13 +172,10 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 				strcpy(SQLUDF_MSGTX, "KMEANS ERROR");
 			}
 		}
-		/* Error Handling
-		if(numCoords!=9) {
-			printf("Wrong number of coords in file\n");
-			return -1;
-		}
-		*/
+		
 		pScratArea->result_pos = 0;
+		
+		pScratArea->clusters[pScratArea->result_pos][0]=count;
 		break;
     }
     case SQLUDF_TF_FETCH:
