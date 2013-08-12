@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>     /* read(), close() */
 
+#define MAX_CHAR_PER_LINE 128
 /*** kmeans ***/
 
 float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
@@ -40,6 +42,69 @@ float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
 //        assert(numBytesRead == len*sizeof(float));
 
         close(infile);
+    } else {  /* input file is in ASCII format -------------------------------*/
+        FILE *infile;
+        char *line, *ret;
+        int   lineLen;
+
+        if ((infile = fopen(filename, "r")) == NULL) {
+            fprintf(stderr, "Error: no such file (%s)\n", filename);
+            return NULL;
+        }
+
+        /* first find the number of objects */
+        lineLen = MAX_CHAR_PER_LINE;
+        line = (char*) malloc(lineLen);
+
+        (*numObjs) = 0;
+        while (fgets(line, lineLen, infile) != NULL) {
+            /* check each line to find the max line length */
+            while (strlen(line) == lineLen-1) {
+                /* this line read is not complete */
+                len = strlen(line);
+                fseek(infile, -len, SEEK_CUR);
+
+                /* increase lineLen */
+                lineLen += MAX_CHAR_PER_LINE;
+                line = (char*) realloc(line, lineLen);
+
+                ret = fgets(line, lineLen, infile);
+            }
+
+            if (strtok(line, " \t\n") != 0)
+                (*numObjs)++;
+        }
+        rewind(infile);
+
+        /* find the no. objects of each object */
+        (*numCoords) = 0;
+        while (fgets(line, lineLen, infile) != NULL) {
+            if (strtok(line, " \t\n") != 0) {
+                /* ignore the id (first coordiinate): numCoords = 1; */
+                while (strtok(NULL, " ,\t\n") != NULL) (*numCoords)++;
+                break; /* this makes read from 1st object */
+            }
+        }
+        rewind(infile);
+
+        /* allocate space for objects[][] and read all objects */
+        len = (*numObjs) * (*numCoords);
+        objects    = (float**)malloc((*numObjs) * sizeof(float*));
+        objects[0] = (float*) malloc(len * sizeof(float));
+        for (i=1; i<(*numObjs); i++)
+            objects[i] = objects[i-1] + (*numCoords);
+
+        i = 0;
+        /* read all objects */
+        while (fgets(line, lineLen, infile) != NULL) {
+            if (strtok(line, " \t\n") == NULL) continue;
+            for (j=0; j<(*numCoords); j++)
+                objects[i][j] = atof(strtok(NULL, " ,\t\n"));
+            i++;
+        }
+
+        fclose(infile);
+        free(line);
     }
 
     return objects;
