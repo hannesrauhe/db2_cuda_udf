@@ -196,13 +196,55 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	
+	/**write to databas**/
+	char strStmt[1000];
+	db.setDb("kmeans", "", "");
+
+	db.Connect();
+	sprintf(strStmt, "DROP TABLE COLORS%d",numObjs);
+
+	EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+//		  EMB_SQL_CHECK("drop table");
+
+	cout << "\n  Register table." << endl;
+
+
+	sprintf(strStmt, "CREATE TABLE COLORS%d(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",numObjs);
+
+	EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+	  EMB_SQL_CHECK("create table");
+
+	for(int i=0;i<numObjs;++i) {
+		sprintf(strStmt, "INSERT INTO COLORS%d(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",numObjs,objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
+															objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
+															objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
+		if(!i) {
+			printf("executing %d statements such as this:\n %s\n",numObjs,strStmt);
+		}
+		EXEC SQL EXECUTE IMMEDIATE :strStmt;
+		if(i%1000==0) {
+			printf("Commiting statements: %d\n",i);
+			EXEC SQL COMMIT;
+		}
+	}
+	EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
+
+	cout << "\n  COMMIT.\n";
 	
-	if(argc>2 && strcmp(argv[2],"-txt")==0) {
+	EXEC SQL COMMIT;
+
+	db.Disconnect();
+
+
+	if(argc>2 && strcmp(argv[2],"-files")==0) {
 		FILE *fptr;
-		int   i, j;
+		int   i, j, len;
 		char  outFileName[1024];
-		sprintf(outFileName, "%s.txt", argv[1]);
-		printf("Writing coordinates to file \"%s\"\n", outFileName);
+		sprintf(outFileName, "%s.csv", argv[1]+1);
+		outFileName[3]='_';
+		printf("Writing coordinates to csv file \"%s\"\n", outFileName);
 		fptr = fopen(outFileName, "w");
 		for (i=0; i<numObjs; i++) {
 		    fprintf(fptr, "%d ", i+1);
@@ -211,45 +253,21 @@ int main(int argc, char **argv) {
 		    fprintf(fptr, "\n");
 		}
 		fclose(fptr);	
-	} else {
-		char strStmt[1000];
-		db.setDb("kmeans", "", "");
-	
-		db.Connect();
-		sprintf(strStmt, "DROP TABLE COLORS%d",numObjs);
-
-		EXEC SQL EXECUTE IMMEDIATE :strStmt;
-
-//		  EMB_SQL_CHECK("drop table");
-	
-		cout << "\n  Register table." << endl;
 
 
-		sprintf(strStmt, "CREATE TABLE COLORS%d(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",numObjs);
-
-		EXEC SQL EXECUTE IMMEDIATE :strStmt;
-
-		  EMB_SQL_CHECK("create table");
-	
-		for(int i=0;i<numObjs;++i) {
-			sprintf(strStmt, "INSERT INTO COLORS%d(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",numObjs,objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
-																objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
-																objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
-			if(!i) {		
-				printf("executing %d statements such as this:\n %s\n",numObjs,strStmt);
-			}
-			EXEC SQL EXECUTE IMMEDIATE :strStmt;
-			if(i%1000==0) {
-				printf("Commiting statements: %d\n",i);
-				EXEC SQL COMMIT;
-			}
-		}
-		EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
-		
-		cout << "\n  COMMIT.\n";
-		
-		EXEC SQL COMMIT;
-	
-		db.Disconnect();
+		int binfile;
+		sprintf(outFileName, "%s.bin", argv[1]+1);
+		outFileName[3]='_';
+		printf("Writing coordinates to bin file \"%s\"\n", outFileName);
+		binfile = open(outFileName, O_WRONLY | O_CREAT);
+		if(binfile==-1) {
+		  perror("Cannot open file");
+		  return 1;
+	    }
+		len = numObjs*numCoords;
+		write(binfile,&numObjs,sizeof(numObjs));
+		write(binfile,&numCoords,sizeof(numCoords));
+		write(binfile,objects[0],len*sizeof(float));
+		close(binfile);
 	}
 }

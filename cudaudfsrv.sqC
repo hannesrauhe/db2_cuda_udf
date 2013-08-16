@@ -189,7 +189,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 				EXEC SQL FETCH c50 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
 				if (sqlca.sqlcode != 0) {
 				   strcpy(SQLUDF_STATE, "38610");
-				   sprintf(SQLUDF_MSGTX, "Fetch falied with SQLCODE = %d.",  SQLCODE);
+				   sprintf(SQLUDF_MSGTX, "Fetch failed with SQLCODE = %d.",  SQLCODE);
 				   return;
 				}
 				objects[i][0]=c1; objects[i][1]=c2; objects[i][2]=c3;
@@ -199,14 +199,18 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 			EXEC SQL CLOSE c50;
 			if (sqlca.sqlcode != 0) {
 			   strcpy(SQLUDF_STATE, "38610");
-			   sprintf(SQLUDF_MSGTX, "Closing data cursorfailed with SQLCODE = %d.",  SQLCODE);
+			   sprintf(SQLUDF_MSGTX, "Closing data cursor failed with SQLCODE = %d.",  SQLCODE);
 			   return;
 			}
 		}
 
 		if(objects==NULL || objects[0]==NULL) {
+			const char* t=table;
+			if(strlen(table+4)>30) {
+				t=table+4+strlen(table)-30;
+			}
 			strcpy(SQLUDF_STATE, "38999");
-			sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s",table+4);
+			sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s (crop)",t);
 		} else {
 			pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
 		
