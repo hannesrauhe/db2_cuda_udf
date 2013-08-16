@@ -14,7 +14,7 @@ seq_kmeans.o: seq_kmeans.c
 	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c seq_kmeans.c
 	
 cuda_kmeans.o: cuda_kmeans.cu
-	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu
+	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu -DBLOCK_SHARED_MEM_OPTIMIZATION=1
 
 cudaudfcli: utilemb.sqC cudaudfcli.sqC
 	./embprep utilemb
@@ -29,7 +29,7 @@ install: cudaudfsrv
 readcolordata: utilemb.sqC readcolordata.sqC
 	./embprep utilemb kmeans
 	./embprep readcolordata kmeans
-	g++ -m64 -I$(DB2PATH)/include -c readcolordata.C -Wno-write-strings
+	g++ -g -m64 -I$(DB2PATH)/include -c readcolordata.C -Wno-write-strings
 	g++ -Wl,-rpath,$(DB2PATH)/lib64 -I$(DB2PATH)/include -c utilemb.C -Wno-write-strings
 	g++ -Wl,-rpath,$(DB2PATH)/lib64 -o readcolordata readcolordata.o utilemb.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2	
 	

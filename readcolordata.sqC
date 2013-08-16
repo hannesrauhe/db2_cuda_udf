@@ -6,6 +6,7 @@
 #include <sys/types.h>  /* open() */
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>       /* time */
 #if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
     (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
    #include <iomanip>
@@ -17,6 +18,8 @@
 #endif
 
 #include <locale>
+
+#define MAX_CHAR_PER_LINE 128
 
 /*---< file_read() >---------------------------------------------------------*/
 float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
@@ -52,7 +55,110 @@ float** file_read(int   isBinaryFile,  /* flag: 0 or 1 */
 //        assert(numBytesRead == len*sizeof(float));
 
         close(infile);
+    } else {  /* input file is in ASCII format -------------------------------*/
+        FILE *infile;
+        char *line, *ret;
+        int   lineLen;
+
+        if ((infile = fopen(filename, "r")) == NULL) {
+            fprintf(stderr, "Error: no such file (%s)\n", filename);
+            return NULL;
+        }
+
+        /* first find the number of objects */
+        lineLen = MAX_CHAR_PER_LINE;
+        line = (char*) malloc(lineLen);
+
+        (*numObjs) = 0;
+        while (fgets(line, lineLen, infile) != NULL) {
+            /* check each line to find the max line length */
+            while (strlen(line) == lineLen-1) {
+                /* this line read is not complete */
+                len = strlen(line);
+                fseek(infile, -len, SEEK_CUR);
+
+                /* increase lineLen */
+                lineLen += MAX_CHAR_PER_LINE;
+                line = (char*) realloc(line, lineLen);
+
+                ret = fgets(line, lineLen, infile);
+            }
+
+            if (strtok(line, " \t\n") != 0)
+                (*numObjs)++;
+        }
+        rewind(infile);
+
+        /* find the no. objects of each object */
+        (*numCoords) = 0;
+        while (fgets(line, lineLen, infile) != NULL) {
+            if (strtok(line, " \t\n") != 0) {
+                /* ignore the id (first coordiinate): numCoords = 1; */
+                while (strtok(NULL, " ,\t\n") != NULL) (*numCoords)++;
+                break; /* this makes read from 1st object */
+            }
+        }
+        rewind(infile);
+
+        /* allocate space for objects[][] and read all objects */
+        len = (*numObjs) * (*numCoords);
+        objects    = (float**)malloc((*numObjs) * sizeof(float*));
+        objects[0] = (float*) malloc(len * sizeof(float));
+        for (i=1; i<(*numObjs); i++)
+            objects[i] = objects[i-1] + (*numCoords);
+
+        i = 0;
+        /* read all objects */
+        while (fgets(line, lineLen, infile) != NULL) {
+            if (strtok(line, " \t\n") == NULL) continue;
+            for (j=0; j<(*numCoords); j++)
+                objects[i][j] = atof(strtok(NULL, " ,\t\n"));
+            i++;
+        }
+
+        fclose(infile);
+        free(line);
     }
+
+    return objects;
+}
+
+double fRand(double fMin, double fMax) {
+    double f = (double)rand() / RAND_MAX;
+    return fMin + f * (fMax - fMin);
+}
+
+float** generate_coords(int  *numObjs)
+{
+    float **objects;
+    int     i, j, len;
+
+  	srand (time(NULL));
+    len = (*numObjs) * 9;
+    objects    = (float**)malloc((*numObjs) * sizeof(float*));
+    objects[0] = (float*) malloc(len * sizeof(float));
+    	i=0;
+    	objects[i][0] = fRand(-2.08939100000000E+000,3.84149300000000E+000);
+    	objects[i][1] = fRand(-1.85941200000000E+000,2.84670900000000E+000);
+    	objects[i][2] = fRand(-2.93385400000000E+000,1.68351100000000E+000);
+    	objects[i][3] = fRand(-2.06475100000000E+000,4.42222900000000E+000);
+    	objects[i][4] = fRand(-3.70197900000000E+000,4.04984000000000E+000);
+    	objects[i][5] = fRand(-5.34535800000000E+000,1.73093300000000E+000);
+    	objects[i][6] = fRand(-2.90948500000000E+000,4.75152300000000E+000);
+    	objects[i][7] = fRand(-3.37385000000000E+000,4.42029700000000E+000);
+    	objects[i][8] = fRand(-2.77897300000000E+000,1.92232700000000E+000);
+    for (i=1; i<(*numObjs); i++) {
+        objects[i] = objects[i-1] + 9;
+    	objects[i][0] = fRand(-2.08939100000000E+000,3.84149300000000E+000);
+    	objects[i][1] = fRand(-1.85941200000000E+000,2.84670900000000E+000);
+    	objects[i][2] = fRand(-2.93385400000000E+000,1.68351100000000E+000);
+    	objects[i][3] = fRand(-2.06475100000000E+000,4.42222900000000E+000);
+    	objects[i][4] = fRand(-3.70197900000000E+000,4.04984000000000E+000);
+    	objects[i][5] = fRand(-5.34535800000000E+000,1.73093300000000E+000);
+    	objects[i][6] = fRand(-2.90948500000000E+000,4.75152300000000E+000);
+    	objects[i][7] = fRand(-3.37385000000000E+000,4.42029700000000E+000);
+    	objects[i][8] = fRand(-2.77897300000000E+000,1.92232700000000E+000);
+	}
 
     return objects;
 }
@@ -69,12 +175,21 @@ int main(int argc, char **argv) {
 	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
 
 	if(argc<2) {
-		printf("USAGE: %s <filename> [-txt]\n",argv[0]);
-		printf("if -txt specified, the file under <filename> will be converted to txt\n");
+		printf("USAGE: %s <filename>|-gen=<num> [-txt]\n",argv[0]);
+		printf("if -txt specified, the input will be converted to txt\n");
 		printf("else its content will be inserted into the database\n");
 		return -1;
 	}
-	objects = file_read(1, argv[1], &numObjs, &numCoords);
+	
+	if(abs(strcmp(argv[1],"-gen="))>5) {
+		numCoords=9;
+		numObjs = atoi(argv[1]+5);
+		printf("Generating %d random numbers\n",numObjs);
+		objects = generate_coords(&numObjs);
+	} else {
+		printf("Readings numbers from\n",argv[1]);
+		objects = file_read(1, argv[1], &numObjs, &numCoords);
+	}
 
 	if(numCoords!=9) {
 		printf("Wrong number of coords in file\n");
@@ -97,26 +212,37 @@ int main(int argc, char **argv) {
 		}
 		fclose(fptr);	
 	} else {
+		char strStmt[1000];
 		db.setDb("kmeans", "", "");
 	
 		db.Connect();
-		EXEC SQL DROP TABLE colors;
+		sprintf(strStmt, "DROP TABLE COLORS%d",numObjs);
+
+		EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+//		  EMB_SQL_CHECK("drop table");
 	
 		cout << "\n  Register table." << endl;
-	
-		  EXEC SQL CREATE TABLE
-		    COLORS(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE);
+
+
+		sprintf(strStmt, "CREATE TABLE COLORS%d(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",numObjs);
+
+		EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
 		  EMB_SQL_CHECK("create table");
 	
-		char strStmt[1000];  
 		for(int i=0;i<numObjs;++i) {
-			sprintf(strStmt, "INSERT INTO colors(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
+			sprintf(strStmt, "INSERT INTO COLORS%d(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",numObjs,objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
 																objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
 																objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
 			if(!i) {		
 				printf("executing %d statements such as this:\n %s\n",numObjs,strStmt);
 			}
 			EXEC SQL EXECUTE IMMEDIATE :strStmt;
+			if(i%1000==0) {
+				printf("Commiting statements: %d\n",i);
+				EXEC SQL COMMIT;
+			}
 		}
 		EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
 		
