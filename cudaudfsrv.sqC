@@ -178,7 +178,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 			EXEC SQL FETCH c50 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
 			if (sqlca.sqlcode != 0) {
 			   strcpy(SQLUDF_STATE, "38610");
-			   sprintf(SQLUDF_MSGTX, "First fetch falied with SQLCODE = %d.",  SQLCODE);
+			   sprintf(SQLUDF_MSGTX, "First fetch failed with SQLCODE = %d.",  SQLCODE);
 			   return;
 			}
 			objects[0][0]=c1; objects[0][1]=c2; objects[0][2]=c3;

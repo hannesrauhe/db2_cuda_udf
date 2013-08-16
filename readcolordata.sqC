@@ -259,7 +259,8 @@ int main(int argc, char **argv) {
 		sprintf(outFileName, "%s.bin", argv[1]+1);
 		outFileName[3]='_';
 		printf("Writing coordinates to bin file \"%s\"\n", outFileName);
-		binfile = open(outFileName, O_WRONLY | O_CREAT);
+		umask(0);
+		binfile = open(outFileName, O_WRONLY | O_CREAT, 0777);
 		if(binfile==-1) {
 		  perror("Cannot open file");
 		  return 1;
