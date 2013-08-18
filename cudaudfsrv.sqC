@@ -36,6 +36,12 @@ struct kmeans_scratch
 };
 
 
+
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[1000];
+EXEC SQL END DECLARE SECTION;
+
 /*
 DROP Function KMEANSCOLORUDF;
 
@@ -53,7 +59,7 @@ FINAL CALL
 DISALLOW PARALLEL
 DBINFO
 
-select * from TABLE(KMEANSCOLORUDF(8,'CPU'));
+select * from TABLE(KMEANSCOLORUDF(8,'CPU','COLORS100'));
  */
 #ifdef __cplusplus
 extern "C"
@@ -103,7 +109,7 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 		float   threshold = 0.001;
 		float **objects;
 		struct sqlca sqlca;
-		char strStmt[1000];
+//		char strStmt[1000];
 		
 		
 		pScratArea->numClusters = *numClusters;

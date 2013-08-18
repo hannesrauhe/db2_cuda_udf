@@ -1,13 +1,14 @@
 #!/usr/bin/python
-import subprocess,os
+import subprocess,os,sys,pprint
 
 sql_file = "kmeans_gen.sql"
 result_file = "result_gen.txt"
-bin_dir = "/home/db2inst1/workspace/db2CudaUDF/"
+bin_dir = sys.path[0]
 wrk_dir = os.getcwd()+"/"
 
 sqlf = open(sql_file,"w")
 q_list = []
+print bin_dir
 for tables in [100,1000]:
   subprocess.call([bin_dir+"/readcolordata","-gen=%d"%tables,"-files"])
   for dev in ['GPU','CPU']:
@@ -30,4 +31,5 @@ for q,resultl in zip(q_list,r):
   q.append(resultl.split()[6])
 #  print ",".join(str(x) for x in q)+","+str(resultl.split()[6])
 
-print q_list
+pp = pprint.PrettyPrinter(depth=6)
+pp.pprint( q_list )
