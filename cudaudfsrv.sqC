@@ -372,38 +372,38 @@ void SQL_API_FN kmeansColorStaticUDF(// Return row fields
 		EXEC SQL END DECLARE SECTION;
 
 
-		EXEC SQL DECLARE c40 CURSOR FOR	SELECT COUNT(*) AS count FROM COLORS17695;
+		EXEC SQL DECLARE c41 CURSOR FOR	SELECT COUNT(*) AS count FROM COLORS;
 
 
-		EXEC SQL OPEN c40;
+		EXEC SQL OPEN c41;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
 		   sprintf(SQLUDF_MSGTX, "Count cursor failed on COLORS17695, SQLCODE=%d.", SQLCODE);
 		   return;
 		}
 
-		EXEC SQL FETCH c40 INTO :count :countInd;
+		EXEC SQL FETCH c41 INTO :count :countInd;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
 		   sprintf(SQLUDF_MSGTX, "Fetch Count failed with SQLCODE = %d.",  SQLCODE);
 		   return;
 		}
-		EXEC SQL CLOSE c40;
+		EXEC SQL CLOSE c41;
 		pScratArea->numObjs = count;
 		objects    = (float**)malloc(pScratArea->numObjs * sizeof(float*));
 		objects[0] = (float*) malloc(pScratArea->numObjs * pScratArea->numCoords * sizeof(float));
 
 
-		EXEC SQL DECLARE c50 CURSOR FOR SELECT C1,C2,C3,C4,C5,C6,C7,C8,C9 FROM COLORS17695;
+		EXEC SQL DECLARE c51 CURSOR FOR SELECT C1,C2,C3,C4,C5,C6,C7,C8,C9 FROM COLORS;
 
-		EXEC SQL OPEN c50;
+		EXEC SQL OPEN c51;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
 		   sprintf(SQLUDF_MSGTX, "Open data fetch cursor failed with SQLCODE = %d.",  SQLCODE);
 		   return;
 		}
 
-		EXEC SQL FETCH c50 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
+		EXEC SQL FETCH c51 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
 		   sprintf(SQLUDF_MSGTX, "First fetch failed with SQLCODE = %d.",  SQLCODE);
@@ -414,7 +414,7 @@ void SQL_API_FN kmeansColorStaticUDF(// Return row fields
 		objects[0][6]=c7; objects[0][7]=c8; objects[0][8]=c9;
 		for(int i=1;i<pScratArea->numObjs;++i) {
 			objects[i] = objects[i-1] + (pScratArea->numCoords);
-			EXEC SQL FETCH c50 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
+			EXEC SQL FETCH c51 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
 			if (sqlca.sqlcode != 0) {
 			   strcpy(SQLUDF_STATE, "38610");
 			   sprintf(SQLUDF_MSGTX, "Fetch failed with SQLCODE = %d.",  SQLCODE);
@@ -424,7 +424,7 @@ void SQL_API_FN kmeansColorStaticUDF(// Return row fields
 			objects[i][3]=c4; objects[i][4]=c5; objects[i][5]=c6;
 			objects[i][6]=c7; objects[i][7]=c8; objects[i][8]=c9;
 		}
-		EXEC SQL CLOSE c50;
+		EXEC SQL CLOSE c51;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
 		   sprintf(SQLUDF_MSGTX, "Closing data cursor failed with SQLCODE = %d.",  SQLCODE);
