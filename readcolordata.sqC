@@ -175,8 +175,8 @@ int main(int argc, char **argv) {
 	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
 
 	if(argc<2) {
-		printf("USAGE: %s <filename>|-gen=<num> [-txt]\n",argv[0]);
-		printf("if -txt specified, the input will be converted to txt\n");
+		printf("USAGE: %s <filename>|-gen=<num> [-files]\n",argv[0]);
+		printf("if -files specified, the input will be converted to csv and bin\n");
 		printf("else its content will be inserted into the database\n");
 		return -1;
 	}
@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	
-	/**write to databas**/
+	/**write to database**/
 	char strStmt[1000];
 	db.setDb("kmeans", "", "");
 
