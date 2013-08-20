@@ -378,7 +378,7 @@ void SQL_API_FN kmeansColorStaticUDF(// Return row fields
 		EXEC SQL OPEN c41;
 		if (sqlca.sqlcode != 0) {
 		   strcpy(SQLUDF_STATE, "38610");
-		   sprintf(SQLUDF_MSGTX, "Count cursor failed on COLORS17695, SQLCODE=%d.", SQLCODE);
+		   sprintf(SQLUDF_MSGTX, "Count cursor failed on COLORS, SQLCODE=%d.", SQLCODE);
 		   return;
 		}
 
@@ -495,4 +495,4 @@ void SQL_API_FN kmeansColorStaticUDF(// Return row fields
     case SQLUDF_TF_FINAL:
       break;
   }
-} //kmeansColorUDF
+} //kmeansColorStaticUDF

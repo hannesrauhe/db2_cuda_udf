@@ -169,13 +169,16 @@ int main(int argc, char **argv) {
 	DbEmb db;
 	struct sqlca sqlca;
 	
+	bool gen_files = false;
+	char tablename[255] = "COLORS";
+
 	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
 	setlocale(LC_ALL, "");
 	setlocale(LC_NUMERIC, "en_US.UTF-8");
 	printf ("Locale is: %s\n", setlocale(LC_ALL,NULL) );
 
 	if(argc<2) {
-		printf("USAGE: %s <filename>|-gen=<num> [-files]\n",argv[0]);
+		printf("USAGE: %s <filename>|-gen=<num> [-files] [-table-name=<name>]\n",argv[0]);
 		printf("if -files specified, the input will be converted to csv and bin\n");
 		printf("else its content will be inserted into the database\n");
 		return -1;
@@ -185,10 +188,18 @@ int main(int argc, char **argv) {
 		numCoords=9;
 		numObjs = atoi(argv[1]+5);
 		printf("Generating %d random numbers\n",numObjs);
+		sprintf(tablename,"COLORS%d",numObjs);
 		objects = generate_coords(&numObjs);
 	} else {
 		printf("Readings numbers from\n",argv[1]);
 		objects = file_read(1, argv[1], &numObjs, &numCoords);
+	}
+
+	for(int argi = 2; argi < argc; ++argi) {
+		if(strcmp(argv[argi],"-files")==0)
+			gen_files = true;
+		else if(strncmp(argv[argi],"-table-name=",12)==0)
+			strcpy(tablename,argv[argi]+12);
 	}
 
 	if(numCoords!=9) {
@@ -201,7 +212,7 @@ int main(int argc, char **argv) {
 	db.setDb("kmeans", "", "");
 
 	db.Connect();
-	sprintf(strStmt, "DROP TABLE COLORS%d",numObjs);
+	sprintf(strStmt, "DROP TABLE %s",tablename);
 
 	EXEC SQL EXECUTE IMMEDIATE :strStmt;
 
@@ -210,14 +221,14 @@ int main(int argc, char **argv) {
 	cout << "\n  Register table." << endl;
 
 
-	sprintf(strStmt, "CREATE TABLE COLORS%d(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",numObjs);
+	sprintf(strStmt, "CREATE TABLE %s(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",tablename);
 
 	EXEC SQL EXECUTE IMMEDIATE :strStmt;
 
 	  EMB_SQL_CHECK("create table");
 
 	for(int i=0;i<numObjs;++i) {
-		sprintf(strStmt, "INSERT INTO COLORS%d(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",numObjs,objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
+		sprintf(strStmt, "INSERT INTO %s(C1,C2,C3,C4,C5,C6,C7,C8,C9) VALUES(%f,%f,%f,%f,%f,%f,%f,%f,%f)\n",tablename,objects[0][i*numCoords+0],objects[0][i*numCoords+1],objects[0][i*numCoords+2],
 															objects[0][i*numCoords+3],objects[0][i*numCoords+4],objects[0][i*numCoords+5],
 															objects[0][i*numCoords+6],objects[0][i*numCoords+7],objects[0][i*numCoords+8]);
 		if(!i) {
@@ -238,7 +249,7 @@ int main(int argc, char **argv) {
 	db.Disconnect();
 
 
-	if(argc>2 && strcmp(argv[2],"-files")==0) {
+	if(gen_files) {
 		FILE *fptr;
 		int   i, j, len;
 		char  outFileName[1024];
