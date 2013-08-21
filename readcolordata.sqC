@@ -184,14 +184,14 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	
-	if(abs(strcmp(argv[1],"-gen="))>5) {
+	if(strncmp(argv[1],"-gen=",5)==0) {
 		numCoords=9;
 		numObjs = atoi(argv[1]+5);
 		printf("Generating %d random numbers\n",numObjs);
 		sprintf(tablename,"COLORS%d",numObjs);
 		objects = generate_coords(&numObjs);
 	} else {
-		printf("Readings numbers from\n",argv[1]);
+		printf("Readings numbers from %s\n",argv[1]);
 		objects = file_read(1, argv[1], &numObjs, &numCoords);
 	}
 
