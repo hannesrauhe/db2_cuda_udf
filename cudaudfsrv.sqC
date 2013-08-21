@@ -99,16 +99,34 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
     {
 		int     loop_iterations = 0;
 		float   threshold = 0.001;
-		float **objects;
+		float **objects = NULL;
 		struct sqlca sqlca;
 		
 		
 		pScratArea->numClusters = *numClusters;
 
 		if(strncmp("CSV:",table,4)==0) {
-			objects = file_read(0, table+4, &(pScratArea->numObjs), &(pScratArea->numCoords));
+			char* filename = table+4;
+			objects = file_read(0, filename, &(pScratArea->numObjs), &(pScratArea->numCoords));
+			if(objects==NULL || objects[0]==NULL) {
+				if(strlen(filename)>25) {
+					filename=filename+strlen(filename)-25;
+				}
+				strcpy(SQLUDF_STATE, "38999");
+				sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s (crop)",filename);
+				return;
+			}
 		} else if(strncmp("BIN:",table,4)==0) {
-			objects = file_read(1, table+4, &(pScratArea->numObjs), &(pScratArea->numCoords));
+			char* filename = table+4;
+			objects = file_read(1, filename, &(pScratArea->numObjs), &(pScratArea->numCoords));
+			if(objects==NULL || objects[0]==NULL) {
+				if(strlen(filename)>25) {
+					filename=filename+strlen(filename)-25;
+				}
+				strcpy(SQLUDF_STATE, "38999");
+				sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s (crop)",filename);
+				return;
+			}
 		} else {
 			EXEC SQL BEGIN DECLARE SECTION;
 			       char strStmt[1000];
@@ -168,6 +186,8 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 
 			EXEC SQL OPEN c50;
 			if (sqlca.sqlcode != 0) {
+				free(objects[0]);
+				free(objects);
 			   strcpy(SQLUDF_STATE, "38610");
 			   sprintf(SQLUDF_MSGTX, "Open data fetch cursor failed with SQLCODE = %d.",  SQLCODE);
 			   return;
@@ -175,6 +195,8 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 
 			EXEC SQL FETCH c50 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
 			if (sqlca.sqlcode != 0) {
+				free(objects[0]);
+				free(objects);
 			   strcpy(SQLUDF_STATE, "38610");
 			   sprintf(SQLUDF_MSGTX, "First fetch failed with SQLCODE = %d.",  SQLCODE);
 			   return;
@@ -196,37 +218,30 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 			}
 			EXEC SQL CLOSE c50;
 			if (sqlca.sqlcode != 0) {
+				free(objects[0]);
+				free(objects);
 			   strcpy(SQLUDF_STATE, "38610");
 			   sprintf(SQLUDF_MSGTX, "Closing data cursor failed with SQLCODE = %d.",  SQLCODE);
 			   return;
 			}
 		}
 
-		if(objects==NULL || objects[0]==NULL) {
-			const char* t=table;
-			if(strlen(table+4)>30) {
-				t=table+4+strlen(table)-30;
-			}
-			strcpy(SQLUDF_STATE, "38999");
-			sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s (crop)",t);
+		pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
+
+		if(strcmp(device,"GPU") == 0) {
+			pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+							pScratArea->membership, &loop_iterations);
+	//				pScratArea->clusters[0][0] = cuda_test();
 		} else {
-			pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
-		
-			if(strcmp(device,"GPU") == 0) {
-				pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-								pScratArea->membership, &loop_iterations);
-		//				pScratArea->clusters[0][0] = cuda_test();
-			} else {
-				pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-						pScratArea->membership, &loop_iterations);
-			}
-		
-			free(objects[0]);
-			free(objects);
-			if(pScratArea->clusters==NULL) {
-				strcpy(SQLUDF_STATE, "38998");
-				strcpy(SQLUDF_MSGTX, "KMEANS ERROR");
-			}
+			pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+					pScratArea->membership, &loop_iterations);
+		}
+
+		free(objects[0]);
+		free(objects);
+		if(pScratArea->clusters==NULL) {
+			strcpy(SQLUDF_STATE, "38998");
+			strcpy(SQLUDF_MSGTX, "KMEANS ERROR");
 		}
 		
 		pScratArea->result_pos = 0;

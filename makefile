@@ -8,13 +8,13 @@ cudaudfsrv: cudaudfsrv.o cuda_kmeans.o seq_kmeans.o
 	
 cudaudfsrv.o: cudaudfsrv.sqC
 	./embprep cudaudfsrv kmeans
-	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c cudaudfsrv.C -D_REENTRANT
+	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c cudaudfsrv.C -D_REENTRANT -O3
 	
 seq_kmeans.o: seq_kmeans.c
-	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c seq_kmeans.c
+	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c seq_kmeans.c -O3
 	
 cuda_kmeans.o: cuda_kmeans.cu
-	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu -DBLOCK_SHARED_MEM_OPTIMIZATION=1
+	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu -DBLOCK_SHARED_MEM_OPTIMIZATION=1 -O3
 	
 readcolordata: utilemb.sqC readcolordata.sqC
 	./embprep utilemb kmeans
