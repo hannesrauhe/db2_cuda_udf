@@ -9,15 +9,22 @@ def exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations = 
     sql_file = "kmeans_gen.sql"
     result_txt = "result_gen.txt"
     q_list = []
-    devices = ['GPU','CPU'] 
+    devices = ['CPU','GPU'] 
     
     if sanity_check:
         print("Sanity check: comparing results for BIN and DB2 input for size %d"%tables)
-        proc = subprocess.Popen(["db2", "select * from TABLE(KMEANSCOLORUDF(2,'GPU','BIN:%s')) except select * from TABLE(KMEANSCOLORUDF(2,'GPU','%s'))"%(binf_path,table_name)], stdout=subprocess.PIPE)
+        cast_stmt_part = "cast(c1 as decimal(5,3)),cast(c2 as decimal(5,3)),cast(c3 as decimal(5,3)),cast(c4 as decimal(5,3)),cast(c5 as decimal(5,3)),\
+                cast(c6 as decimal(5,3)),cast(c7 as decimal(5,3)),cast(c8 as decimal(5,3)),cast(c9 as decimal(5,3))"
+        bin_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','BIN:%s'))"%(cast_stmt_part,binf_path)
+        db_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','%s'))"%(cast_stmt_part,table_name)
+        cmp_stmt = bin_stmt+"\nexcept \n"+db_stmt
+        print(cmp_stmt)
+        proc = subprocess.Popen(["db2", cmp_stmt], stdout=subprocess.PIPE)
         num_diff_lines = proc.stdout.readlines()[-2].strip()
-        print("select * from TABLE(KMEANSCOLORUDF(2,'GPU','BIN:%s')) except select * from TABLE(KMEANSCOLORUDF(2,'GPU','%s'))"%(binf_path,table_name))
-        print(num_diff_lines)
+        
         if num_diff_lines[0]!="0":
+            subprocess.call(["db2", bin_stmt])
+            subprocess.call(["db2", db_stmt])
             raise Exception("Sanity check failed for size %d."%tables)
     else:
         print("Disabled sanity check")
@@ -32,7 +39,7 @@ def exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations = 
             for inputtab in inputs:
                 q_list.append([dev,tables,numClusters,inputtab[0:3]])
                 sqlf.write("\
---#COMMENT select * from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
+--#COMMENT select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
 --#BGBLK %d\n\
 select * from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
 --#EOBLK\n"%(numClusters,dev,inputtab,num_iterations,numClusters,dev,inputtab))
@@ -102,7 +109,7 @@ try:
         exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations,table_s,sanity)
         
     else:    
-        for tables in [17695]:
+        for tables in [10000,100000,1000000]:
             print("Generating needed data for size %d"%tables)
             csvf_path = "%sgen_%d.csv"%(wrk_dir,tables)
             binf_path = "%sgen_%d.bin"%(wrk_dir,tables)
