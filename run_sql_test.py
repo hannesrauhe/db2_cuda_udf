@@ -3,13 +3,10 @@ import subprocess,os,sys,pprint
 
 import argparse
 
-
-
-def exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations = 3,tables = 999999, sanity_check=True):    
+def exec_statements(binf_path,csvf_path,table_name,result_csvf,tables,num_iterations = 3, sanity_check=True, devices = ['CPU','OMP','GPU']):    
     sql_file = "gen_kmeans.sql"
     result_txt = "gen_results.txt"
-    q_list = []
-    devices = ['CPU','OMP','GPU'] 
+    q_list = [] 
     
     if sanity_check:
         print("Sanity check: comparing results for BIN and DB2 input for size %d"%tables)
@@ -74,7 +71,8 @@ table_name = 'COLORS'
 sanity = True
 force_generate = False
 table_sizes = [10000,20000]
-#
+devs = ["CPU","GPU"]
+
 parser = argparse.ArgumentParser(description='Generate test data; save it in binary, CSV, and in DB2; Execute kmeans UDF on it; save performance results in CSV')
 parser.add_argument('--gen', dest='force_generate',action='store_true', help='generate new data even if files exist already')
 parser.add_argument('--bin-file', dest='binf_path', action='store', help='execute kmeans on input given by binary file instead of generated data ')
@@ -110,7 +108,7 @@ try:
         if not os.path.exists(csvf_path):
             print("No CSV timing: %s does not exist"%csvf_path)
             csvf_path = ""
-        exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations,table_s,sanity)
+        exec_statements(binf_path,csvf_path,table_name,result_csvf,table_s,sanity_check=sanity,devices=devs)
         
     else:    
         for tables in table_sizes:
@@ -120,7 +118,7 @@ try:
             if force_generate or not os.path.exists(csvf_path) or not os.path.exists(binf_path):
                 subprocess.call([bin_dir+"/readcolordata","-gen=%d"%tables,"-files","-table-name=COLORS"])
             
-            exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations,tables,sanity)        
+            exec_statements(binf_path,csvf_path,table_name,result_csvf,tables,sanity_check=sanity,devices=devs)        
 except:
     raise
 finally:
