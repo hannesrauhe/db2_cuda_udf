@@ -16,10 +16,14 @@ float** cuda_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                    float   threshold,    /* % objects change membership */
                    int    *membership,   /* out: [numObjs] */
                    int    *loop_iterations);
-
-/*----< seq_kmeans() >-------------------------------------------------------*/
-/* return an array of cluster centers of size [numClusters][numCoords]       */
 float** seq_kmeans(float **objects,      /* in: [numObjs][numCoords] */
+                   int     numCoords,    /* no. features */
+                   int     numObjs,      /* no. objects */
+                   int     numClusters,  /* no. clusters */
+                   float   threshold,    /* % objects change membership */
+                   int    *membership,   /* out: [numObjs] */
+                   int    *loop_iterations);
+float** omp_kmeans(float **objects,      /* in: [numObjs][numCoords] */
                    int     numCoords,    /* no. features */
                    int     numObjs,      /* no. objects */
                    int     numClusters,  /* no. clusters */
@@ -229,9 +233,11 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 		pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
 
 		if(strcmp(device,"GPU") == 0) {
-			pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
-							pScratArea->membership, &loop_iterations);
-	//				pScratArea->clusters[0][0] = cuda_test();
+					pScratArea->clusters = cuda_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+									pScratArea->membership, &loop_iterations);
+		/*} else if(strcmp(device,"OMP") == 0) {
+			pScratArea->clusters = omp_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
+							pScratArea->membership, &loop_iterations);*/
 		} else {
 			pScratArea->clusters = seq_kmeans(objects, pScratArea->numCoords, pScratArea->numObjs, pScratArea->numClusters, threshold,
 					pScratArea->membership, &loop_iterations);

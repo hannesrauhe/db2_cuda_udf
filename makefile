@@ -2,16 +2,16 @@ DB2PATH=$(HOME)/sqllib
 
 all: cudaudfsrv readcolordata
 
-cudaudfsrv: cudaudfsrv.o cuda_kmeans.o seq_kmeans.o
+cudaudfsrv: cudaudfsrv.o cuda_kmeans.o cpu_kmeans.o
 	#g++ -m64 -shared -o cudaudfsrv cudaudfsrv.o cuda_kmeans.o -Wl,-rpath,$(DB2PATH)/lib64 -L$(DB2PATH)/lib64 -ldb2 -lpthread
-	/usr/local/cuda/bin/nvcc  -o cudaudfsrv cudaudfsrv.o cuda_kmeans.o seq_kmeans.o -L$(DB2PATH)/lib64 -ldb2 -lpthread --shared -m64 -Xlinker=-rpath,$(DB2PATH)/lib64
+	/usr/local/cuda/bin/nvcc  -o cudaudfsrv cudaudfsrv.o cuda_kmeans.o cpu_kmeans.o -L/usr/lib/gcc/i686-linux-gnu/4.4/ -L$(DB2PATH)/lib64 -ldb2 -lpthread -lgomp --shared -m64 -Xlinker=-rpath,$(DB2PATH)/lib64
 	
 cudaudfsrv.o: cudaudfsrv.sqC
 	./embprep cudaudfsrv kmeans
 	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c cudaudfsrv.C -D_REENTRANT -O3
 	
-seq_kmeans.o: seq_kmeans.c
-	g++ -m64 -fpic -I/home/db2inst1/sqllib/include -c seq_kmeans.c -O3
+cpu_kmeans.o: cpu_kmeans.c
+	g++ -m64 -fpic -c cpu_kmeans.c  -O3 -fopenmp
 	
 cuda_kmeans.o: cuda_kmeans.cu
 	/usr/local/cuda/bin/nvcc -c -Xcompiler -fpic cuda_kmeans.cu -DBLOCK_SHARED_MEM_OPTIMIZATION=1 -O3

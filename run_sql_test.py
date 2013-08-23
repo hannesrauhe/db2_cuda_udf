@@ -6,10 +6,10 @@ import argparse
 
 
 def exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations = 3,tables = 999999, sanity_check=True):    
-    sql_file = "kmeans_gen.sql"
-    result_txt = "result_gen.txt"
+    sql_file = "gen_kmeans.sql"
+    result_txt = "gen_results.txt"
     q_list = []
-    devices = ['CPU','GPU'] 
+    devices = ['CPU','OMP','GPU'] 
     
     if sanity_check:
         print("Sanity check: comparing results for BIN and DB2 input for size %d"%tables)
@@ -39,10 +39,9 @@ def exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations = 
             for inputtab in inputs:
                 q_list.append([dev,tables,numClusters,inputtab[0:3]])
                 sqlf.write("\
---#COMMENT select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
 --#BGBLK %d\n\
-select * from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
---#EOBLK\n"%(numClusters,dev,inputtab,num_iterations,numClusters,dev,inputtab))
+select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
+--#EOBLK\n"%(num_iterations,numClusters,dev,inputtab))
 
     sqlf.close()
     
@@ -66,7 +65,7 @@ select * from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
         result_csvf.write("\n")
     result_csvf.flush()
 
-result_csv = "result_gen.csv"
+result_csv = "gen_results.csv"
 bin_dir = sys.path[0]
 wrk_dir = os.getcwd()+"/"
 num_iterations = 3
@@ -74,11 +73,14 @@ binf_path = ''
 table_name = 'COLORS'
 sanity = True
 force_generate = False
+table_sizes = [10000,20000]
 #
 parser = argparse.ArgumentParser(description='Generate test data; save it in binary, CSV, and in DB2; Execute kmeans UDF on it; save performance results in CSV')
 parser.add_argument('--gen', dest='force_generate',action='store_true', help='generate new data even if files exist already')
 parser.add_argument('--bin-file', dest='binf_path', action='store', help='execute kmeans on input given by binary file instead of generated data ')
 parser.add_argument('--no-sanity', dest='no_sanity', action='store_true', help='do not check results')
+parser.add_argument('--input-sizes', nargs="*", type=int, help='do tests on table with INPUT_SIZE records')
+#parser.add_argument('--append',action='store_true', help='append results to CSV file instead of replacing it')
 args = parser.parse_args()
 
 if args.binf_path:
@@ -92,6 +94,8 @@ if args.no_sanity:
     sanity=False
 if args.force_generate:
     force_generate = True
+if args.input_sizes:
+    table_sizes=args.input_sizes
 
 subprocess.call(["db2", "connect to kmeans"])
 result_csvf = open(result_csv,"w")
@@ -109,7 +113,7 @@ try:
         exec_statements(binf_path,csvf_path,table_name,result_csvf,num_iterations,table_s,sanity)
         
     else:    
-        for tables in [10000,100000,1000000]:
+        for tables in table_sizes:
             print("Generating needed data for size %d"%tables)
             csvf_path = "%sgen_%d.csv"%(wrk_dir,tables)
             binf_path = "%sgen_%d.bin"%(wrk_dir,tables)
