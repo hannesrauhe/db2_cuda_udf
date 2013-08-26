@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
 	cout << "\n  Register table." << endl;
 
 
-	sprintf(strStmt, "CREATE TABLE %s(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE)",tablename);
+	sprintf(strStmt, "CREATE TABLE %s(C1 DOUBLE, C2 DOUBLE, C3 DOUBLE, C4 DOUBLE, C5 DOUBLE, C6 DOUBLE, C7 DOUBLE, C8 DOUBLE, C9 DOUBLE) in userspace10",tablename);
 
 	EXEC SQL EXECUTE IMMEDIATE :strStmt;
 

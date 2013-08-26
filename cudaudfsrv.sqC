@@ -67,15 +67,15 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
 						 SQLUDF_CHAR *device,
 						 SQLUDF_CHAR *table,
 						 //out:
-                         SQLUDF_DOUBLE *C1,
-                         SQLUDF_DOUBLE *C2,
-                         SQLUDF_DOUBLE *C3,
-                         SQLUDF_DOUBLE *C4,
-                         SQLUDF_DOUBLE *C5,
-                         SQLUDF_DOUBLE *C6,
-                         SQLUDF_DOUBLE *C7,
-                         SQLUDF_DOUBLE *C8,
-                         SQLUDF_DOUBLE *C9,
+                         SQLUDF_DOUBLE *o_C1,
+                         SQLUDF_DOUBLE *o_C2,
+                         SQLUDF_DOUBLE *o_C3,
+                         SQLUDF_DOUBLE *o_C4,
+                         SQLUDF_DOUBLE *o_C5,
+                         SQLUDF_DOUBLE *o_C6,
+                         SQLUDF_DOUBLE *o_C7,
+                         SQLUDF_DOUBLE *o_C8,
+                         SQLUDF_DOUBLE *o_C9,
                          // Return row field null indicators
                          SQLUDF_SMALLINT *ColorNullInd,
                          SQLUDF_SMALLINT *deviceNullInd,
@@ -262,29 +262,15 @@ void SQL_API_FN kmeansColorUDF(// Return row fields
         break;
       }
       // Normal call UDF: Fetch next row
-      *C1 = (double)pScratArea->clusters[pScratArea->result_pos][0];
-      *C2 = (double)pScratArea->clusters[pScratArea->result_pos][1];
-      *C3 = (double)pScratArea->clusters[pScratArea->result_pos][2];
-      *C4 = (double)pScratArea->clusters[pScratArea->result_pos][3];
-      *C5 = (double)pScratArea->clusters[pScratArea->result_pos][4];
-      *C6 = (double)pScratArea->clusters[pScratArea->result_pos][5];
-      *C7 = (double)pScratArea->clusters[pScratArea->result_pos][6];
-      *C8 = (double)pScratArea->clusters[pScratArea->result_pos][7];
-      *C9 = (double)pScratArea->clusters[pScratArea->result_pos][8];
-/*
-    	if(pScratArea->result_pos>=1) {
-    	      strcpy(SQLUDF_STATE, "02000");
-    		break;
-    	}
-        *C1 = pScratArea->numObjs;
-        *C2 = pScratArea->numClusters;
-        *C3 = pScratArea->numCoords;
-        *C4 = 0;
-        *C5 =0;
-        *C6 = 0;
-        *C7 = 0;
-        *C8 = 0;
-        *C9 = 0;*/
+      *o_C1 = (double)pScratArea->clusters[pScratArea->result_pos][0];
+      *o_C2 = (double)pScratArea->clusters[pScratArea->result_pos][1];
+      *o_C3 = (double)pScratArea->clusters[pScratArea->result_pos][2];
+      *o_C4 = (double)pScratArea->clusters[pScratArea->result_pos][3];
+      *o_C5 = (double)pScratArea->clusters[pScratArea->result_pos][4];
+      *o_C6 = (double)pScratArea->clusters[pScratArea->result_pos][5];
+      *o_C7 = (double)pScratArea->clusters[pScratArea->result_pos][6];
+      *o_C8 = (double)pScratArea->clusters[pScratArea->result_pos][7];
+      *o_C9 = (double)pScratArea->clusters[pScratArea->result_pos][8];
       // Next row of data
       pScratArea->result_pos++;
       strcpy(SQLUDF_STATE, "00000");
@@ -312,15 +298,15 @@ void SQL_API_FN cmpFileTable(
 						 SQLUDF_CHAR *filename,
 						 SQLUDF_CHAR *table,
 						 //out:
-                         SQLUDF_DOUBLE *C1,
-                         SQLUDF_DOUBLE *C2,
-                         SQLUDF_DOUBLE *C3,
-                         SQLUDF_DOUBLE *C4,
-                         SQLUDF_DOUBLE *C5,
-                         SQLUDF_DOUBLE *C6,
-                         SQLUDF_DOUBLE *C7,
-                         SQLUDF_DOUBLE *C8,
-                         SQLUDF_DOUBLE *C9,
+                         SQLUDF_DOUBLE *o_C1,
+                         SQLUDF_DOUBLE *o_C2,
+                         SQLUDF_DOUBLE *o_C3,
+                         SQLUDF_DOUBLE *o_C4,
+                         SQLUDF_DOUBLE *o_C5,
+                         SQLUDF_DOUBLE *o_C6,
+                         SQLUDF_DOUBLE *o_C7,
+                         SQLUDF_DOUBLE *o_C8,
+                         SQLUDF_DOUBLE *o_C9,
                          // Return row field null indicators
                          SQLUDF_SMALLINT *fileNullInd,
                          SQLUDF_SMALLINT *tableNullInd,
@@ -335,9 +321,41 @@ void SQL_API_FN cmpFileTable(
                          SQLUDF_SMALLINT *C9NullInd,
                          SQLUDF_TRAIL_ARGS_ALL)
 {
-  struct kmeans_scratch *pScratArea;
-  pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
-  pScratArea->numCoords = 9;
+	struct sqlca sqlca;
+	struct kmeans_scratch *pScratArea;
+	pScratArea = (struct kmeans_scratch *)SQLUDF_SCRAT->data;
+	pScratArea->numCoords = 9;
+
+
+EXEC SQL BEGIN DECLARE SECTION;
+	   char strStmt[1000];
+	   int count;
+	   short countInd;
+	   double c1;
+	   short c1Ind;
+	   double c2;
+	   short c2Ind;
+	   double c3;
+	   short c3Ind;
+	   double c4;
+	   short c4Ind;
+	   double c5;
+	   short c5Ind;
+	   double c6;
+	   short c6Ind;
+	   double c7;
+	   short c7Ind;
+	   double c8;
+	   short c8Ind;
+	   double c9;
+	   short c9Ind;
+EXEC SQL END DECLARE SECTION;
+
+	sprintf(strStmt,"SELECT C1,C2,C3,C4,C5,C6,C7,C8,C9	FROM %s",table);
+
+	EXEC SQL PREPARE stmt23 FROM :strStmt;
+
+	EXEC SQL DECLARE c53 CURSOR FOR stmt23;
 
   // SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are
   // parts of SQLUDF_TRAIL_ARGS_ALL
@@ -345,10 +363,7 @@ void SQL_API_FN cmpFileTable(
   {
     case SQLUDF_TF_OPEN:
     {
-		int     loop_iterations = 0;
-		float   threshold = 0.001;
 		float **objects = NULL;
-		struct sqlca sqlca;
 
 
 		objects = file_read(1, filename, &(pScratArea->numObjs), &(pScratArea->numCoords));
@@ -359,106 +374,89 @@ void SQL_API_FN cmpFileTable(
 			strcpy(SQLUDF_STATE, "38999");
 			sprintf(SQLUDF_MSGTX, "OPENING FILE ERROR: %s (crop)",filename);
 			return;
-		} else {
-			EXEC SQL BEGIN DECLARE SECTION;
-			       char strStmt[1000];
-				   short countInd;
-				   double c1;
-				   short c1Ind;
-				   double c2;
-				   short c2Ind;
-				   double c3;
-				   short c3Ind;
-				   double c4;
-				   short c4Ind;
-				   double c5;
-				   short c5Ind;
-				   double c6;
-				   short c6Ind;
-				   double c7;
-				   short c7Ind;
-				   double c8;
-				   short c8Ind;
-				   double c9;
-				   short c9Ind;
-			EXEC SQL END DECLARE SECTION;
+		}
+		sprintf(strStmt,"SELECT COUNT(*) AS count FROM %s",table);
 
-			sprintf(strStmt,"SELECT C1,C2,C3,C4,C5,C6,C7,C8,C9	FROM %s",table);
+		EXEC SQL PREPARE stmt13 FROM :strStmt;
 
-			EXEC SQL PREPARE stmt23 FROM :strStmt;
+		EXEC SQL DECLARE c43 CURSOR FOR	stmt13;
 
-			EXEC SQL DECLARE c53 CURSOR FOR stmt23;
 
-			EXEC SQL OPEN c53;
-			if (sqlca.sqlcode != 0) {
-				free(objects[0]);
-				free(objects);
-			   strcpy(SQLUDF_STATE, "38610");
-			   sprintf(SQLUDF_MSGTX, "Open data fetch cursor failed with SQLCODE = %d.",  SQLCODE);
-			   return;
-			}
-
-			for(int i=0;i<pScratArea->numObjs;++i) {
-				EXEC SQL FETCH c53 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
-				if (sqlca.sqlcode != 0) {
-				   strcpy(SQLUDF_STATE, "38610");
-				   sprintf(SQLUDF_MSGTX, "Fetch %d failed with SQLCODE = %d.",  i,SQLCODE);
-				   return;
-				}
-				if(
-				compare_double(objects[0][0],c1) || compare_double(objects[0][1],c2 ) || compare_double(objects[0][2],c3) ||
-				compare_double(objects[0][3],c4 ) || compare_double(objects[0][4],c5 ) || compare_double(objects[0][5],c6) ||
-				compare_double(objects[0][6],c7 ) || compare_double(objects[0][7],c8 ) || compare_double(objects[0][8],c9)
-				) {
-					free(objects[0]);
-					free(objects);
-				   strcpy(SQLUDF_STATE, "38610");
-				   sprintf(SQLUDF_MSGTX, "Fetch %d wrong.",  i);
-				   return;
-				}
-			}
-			EXEC SQL CLOSE c53;
-			if (sqlca.sqlcode != 0) {
-				free(objects[0]);
-				free(objects);
-			   strcpy(SQLUDF_STATE, "38610");
-			   sprintf(SQLUDF_MSGTX, "Closing data cursor failed with SQLCODE = %d.",  SQLCODE);
-			   return;
-			}
+		EXEC SQL OPEN c43;
+		if (sqlca.sqlcode != 0) {
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Count cursor failed on %s, SQLCODE=%d.", table, SQLCODE);
+		   return;
 		}
 
-		pScratArea->membership = (int*) malloc(pScratArea->numObjs * sizeof(int));
-
-		free(objects[0]);
-		free(objects);
-		if(pScratArea->clusters==NULL) {
-			strcpy(SQLUDF_STATE, "38998");
-			strcpy(SQLUDF_MSGTX, "KMEANS ERROR");
+		EXEC SQL FETCH c43 INTO :count :countInd;
+		if (sqlca.sqlcode != 0) {
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Fetch Count failed with SQLCODE = %d.",  SQLCODE);
+		   return;
 		}
+		EXEC SQL CLOSE c43;
+		if(pScratArea->numObjs != count) {
+			   strcpy(SQLUDF_STATE, "38615");
+			   sprintf(SQLUDF_MSGTX, "Sizes not matching Table-Size: %d, File: %d",count,pScratArea->numObjs);
+			   return;
+		}
+
+		EXEC SQL OPEN c53;
+		if (sqlca.sqlcode != 0) {
+			free(objects[0]);
+			free(objects);
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Open data fetch cursor failed with SQLCODE = %d.",  SQLCODE);
+		   return;
+		}
+		pScratArea->clusters = objects;
 
 		pScratArea->result_pos = 0;
 
 		break;
     }
     case SQLUDF_TF_FETCH:
-    	if(pScratArea->result_pos>=1) {
-    	      strcpy(SQLUDF_STATE, "02000");
-    		break;
-    	}
-        *C1 = pScratArea->numObjs;
-        *C2 = pScratArea->numClusters;
-        *C3 = pScratArea->numCoords;
-        *C4 = 0;
-        *C5 =0;
-        *C6 = 0;
-        *C7 = 0;
-        *C8 = 0;
-        *C9 = 0;
-      pScratArea->result_pos++;
-      strcpy(SQLUDF_STATE, "00000");
-      break;
+    {
+		float** objects = pScratArea->clusters;
+		for(;pScratArea->result_pos<pScratArea->numObjs;++(pScratArea->result_pos)) {
+			EXEC SQL FETCH c53 INTO :c1 :c1Ind, :c2 :c2Ind, :c3 :c3Ind, :c4 :c4Ind, :c5 :c5Ind, :c6 :c6Ind, :c7 :c7Ind, :c8 :c8Ind, :c9 :c9Ind;
+			if (sqlca.sqlcode != 0) {
+			   strcpy(SQLUDF_STATE, "38610");
+			   sprintf(SQLUDF_MSGTX, "Fetch %d failed with SQLCODE = %d.",  pScratArea->result_pos,SQLCODE);
+			   return;
+			}
+			if(
+			!(compare_double(objects[pScratArea->result_pos][0],c1) &&
+			compare_double(objects[pScratArea->result_pos][1],c2 ) &&
+			compare_double(objects[pScratArea->result_pos][2],c3) &&
+			compare_double(objects[pScratArea->result_pos][3],c4 ) &&
+			compare_double(objects[pScratArea->result_pos][4],c5 ) &&
+			compare_double(objects[pScratArea->result_pos][5],c6) &&
+			compare_double(objects[pScratArea->result_pos][6],c7 ) &&
+			compare_double(objects[pScratArea->result_pos][7],c8 ) &&
+			compare_double(objects[pScratArea->result_pos][8],c9)
+			)) {
+				*o_C1 = c1;*o_C2 = c2;*o_C3 = c3;
+				*o_C4 = c4;*o_C5 = c5;*o_C6 = c6;
+				*o_C7 = c7;*o_C8 = c8;*o_C9 = c9;
+				++(pScratArea->result_pos);
+				break;
+			}
+		}
+		if(pScratArea->result_pos>=pScratArea->numObjs) {
+			strcpy(SQLUDF_STATE, "02000");
+		} else {
+			strcpy(SQLUDF_STATE, "00000");
+		}
+		break;
+    }
     case SQLUDF_TF_CLOSE:
-        free(pScratArea->membership);
+		EXEC SQL CLOSE c53;
+		if (sqlca.sqlcode != 0) {
+		   strcpy(SQLUDF_STATE, "38610");
+		   sprintf(SQLUDF_MSGTX, "Closing data cursor failed with SQLCODE = %d.",  SQLCODE);
+		}
         free(pScratArea->clusters[0]);
         free(pScratArea->clusters);
       break;

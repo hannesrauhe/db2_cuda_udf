@@ -1,48 +1,71 @@
 #!/usr/bin/python
-import subprocess,os,sys,pprint
+import subprocess,os,sys,pprint,copy
 
 import argparse
 
-def exec_statements(binf_path,csvf_path,table_name,result_csvf,tables,num_iterations = 3, sanity_check=True, devices = ['CPU','OMP','GPU']):    
+def cmp_file_table():
+    cmp_stmt = "select * from table(CMPFILETABLE('%sgen_%d.bin','COLORS'))"%(wrk_dir,table_size)
+    print(cmp_stmt)
+    proc = subprocess.Popen(["db2", cmp_stmt], stdout=subprocess.PIPE)
+    num_diff_lines = proc.stdout.readlines()[-2].strip()
+    
+    if num_diff_lines[0]!="0":
+        raise Exception("Sanity check failed for size %d."%table_size)
+
+def cmp_kmeans_results(table_size,table_name):
+    print("Sanity check: comparing results for BIN and DB2 input for size %d"%table_size)
+    cast_stmt_part = "cast(c1 as decimal(5,3)),cast(c2 as decimal(5,3)),cast(c3 as decimal(5,3)),cast(c4 as decimal(5,3)),cast(c5 as decimal(5,3)),\
+            cast(c6 as decimal(5,3)),cast(c7 as decimal(5,3)),cast(c8 as decimal(5,3)),cast(c9 as decimal(5,3))"
+    bin_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','BIN:%s'))"%(cast_stmt_part,binf_path)
+    db_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','%s'))"%(cast_stmt_part,table_name)
+    cmp_stmt = bin_stmt+"\nexcept \n"+db_stmt
+    print(cmp_stmt)
+    proc = subprocess.Popen(["db2", cmp_stmt], stdout=subprocess.PIPE)
+    num_diff_lines = proc.stdout.readlines()[-2].strip()
+    
+    if num_diff_lines[0]!="0":
+        subprocess.call(["db2", bin_stmt])
+        subprocess.call(["db2", db_stmt])
+        raise Exception("Sanity check failed for size %d."%table_size)
+
+def exec_statements(binf_path="",csvf_path="",table_name="",result_csvf="gen_results.csv",table_size=0,num_iterations = 3, sanity_check=True, devices = ['CPU','OMP','GPU'],buffer_size=0):    
     sql_file = "gen_kmeans.sql"
     result_txt = "gen_results.txt"
     q_list = [] 
     
-    if sanity_check:
-        print("Sanity check: comparing results for BIN and DB2 input for size %d"%tables)
-        cast_stmt_part = "cast(c1 as decimal(5,3)),cast(c2 as decimal(5,3)),cast(c3 as decimal(5,3)),cast(c4 as decimal(5,3)),cast(c5 as decimal(5,3)),\
-                cast(c6 as decimal(5,3)),cast(c7 as decimal(5,3)),cast(c8 as decimal(5,3)),cast(c9 as decimal(5,3))"
-        bin_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','BIN:%s'))"%(cast_stmt_part,binf_path)
-        db_stmt = "select %s from TABLE(KMEANSCOLORUDF(2,'GPU','%s'))"%(cast_stmt_part,table_name)
-        cmp_stmt = bin_stmt+"\nexcept \n"+db_stmt
-        print(cmp_stmt)
-        proc = subprocess.Popen(["db2", cmp_stmt], stdout=subprocess.PIPE)
-        num_diff_lines = proc.stdout.readlines()[-2].strip()
-        
-        if num_diff_lines[0]!="0":
-            subprocess.call(["db2", bin_stmt])
-            subprocess.call(["db2", db_stmt])
-            raise Exception("Sanity check failed for size %d."%tables)
-    else:
-        print("Disabled sanity check")
-    
-    print("Generating SQL-statements for size %d"%tables)
+    print("Generating SQL-statements for size %d and buffer %d"%(table_size,buffer_size))
     sqlf = open(sql_file,"w")
     for dev in devices:
-        for numClusters in [2,4,8,16,32,64,128]:            
-            inputs = [table_name,"BIN:"+binf_path]
+        for numClusters in [2,4,8,16,32,64,128]: 
+            if len(binf_path):
+                q_list.append([dev,table_size,numClusters,'BIN'])
+                sqlf.write("\
+--#BGBLK %d\n\
+select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','BIN:%s'));\n\
+--#EOBLK\n"%(num_iterations,numClusters,dev,binf_path))
+                       
             if len(csvf_path):
-                inputs = [table_name,"BIN:"+binf_path,"CSV:"+csvf_path]
-            for inputtab in inputs:
-                q_list.append([dev,tables,numClusters,inputtab[0:3]])
+                q_list.append([dev,table_size,numClusters,'CSV'])
+                sqlf.write("\
+--#BGBLK %d\n\
+select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','CSV:%s'));\n\
+--#EOBLK\n"%(num_iterations,numClusters,dev,csvf_path))
+                
+            if len(table_name):
+                q_list.append([dev,table_size,numClusters,'COL'])
                 sqlf.write("\
 --#BGBLK %d\n\
 select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
---#EOBLK\n"%(num_iterations,numClusters,dev,inputtab))
-
+--#EOBLK\n"%(num_iterations,numClusters,dev,table_name))
+                
     sqlf.close()
+        
+    if 0==len(q_list):
+        print "Nothing to do, give at least csv path, bin path or table name"
+        return
     
-    print("Executing SQL Statements for size %d"%tables)
+    print("Executing SQL Statements for size %d, bufferpool size %d"%(table_size,buffer_size))
+
     subprocess.call(["db2batch", "-f", sql_file,"-d","kmeans","-r",result_txt])
     
     rf = open(result_txt,"r")
@@ -59,7 +82,7 @@ select count(*) from TABLE(KMEANSCOLORUDF(%d,'%s','%s'));\n\
     #write to csv
     for q_r in q_list:
         result_csvf.write(",".join(str(x) for x in q_r))
-        result_csvf.write("\n")
+        result_csvf.write(",%d\n"%buffer_size)
     result_csvf.flush()
 
 result_csv = "gen_results.csv"
@@ -69,12 +92,12 @@ num_iterations = 3
 binf_path = ''
 table_name = 'COLORS'
 sanity = True
-force_generate = False
+no_generate = False
 table_sizes = [10000,20000]
 devs = ["CPU","GPU"]
 
 parser = argparse.ArgumentParser(description='Generate test data; save it in binary, CSV, and in DB2; Execute kmeans UDF on it; save performance results in CSV')
-parser.add_argument('--gen', dest='force_generate',action='store_true', help='generate new data even if files exist already')
+parser.add_argument('--no-gen', dest='no_generate',action='store_true', help='do not generate new data')
 parser.add_argument('--bin-file', dest='binf_path', action='store', help='execute kmeans on input given by binary file instead of generated data ')
 parser.add_argument('--no-sanity', dest='no_sanity', action='store_true', help='do not check results')
 parser.add_argument('--input-sizes', nargs="*", type=int, help='do tests on table with INPUT_SIZE records')
@@ -90,35 +113,43 @@ if args.binf_path:
         
 if args.no_sanity:
     sanity=False
-if args.force_generate:
-    force_generate = True
+if args.no_generate:
+    no_generate = True
 if args.input_sizes:
     table_sizes=args.input_sizes
 
 subprocess.call(["db2", "connect to kmeans"])
 result_csvf = open(result_csv,"w")
-result_csvf.write("DEV,INPUT_SIZE,CLUSTER_SIZE,INPUT_TYPE,EXECUTION_TIME_MIN,EXECUTION_TIME_MAX,EXECUTION_TIME_AVG\n")
+result_csvf.write("DEV,INPUT_SIZE,CLUSTER_SIZE,INPUT_TYPE,EXECUTION_TIME_MIN,EXECUTION_TIME_MAX,EXECUTION_TIME_AVG,BUFFERPOOL\n")
 
 try:
     if len(binf_path):
         subprocess.call([bin_dir+"/readcolordata",binf_path,"-table-name=%s"%table_name])
         proc = subprocess.Popen(["db2", "select count(*) from %s"%(table_name)], stdout=subprocess.PIPE)
-        table_s = int(proc.stdout.readlines()[3].strip())
+        table_size = int(proc.stdout.readlines()[3].strip())
         csvf_path=binf_path.replace(".bin", ".csv")
         if not os.path.exists(csvf_path):
             print("No CSV timing: %s does not exist"%csvf_path)
-            csvf_path = ""
-        exec_statements(binf_path,csvf_path,table_name,result_csvf,table_s,sanity_check=sanity,devices=devs)
+            csvf_path = ""     
+    
+        exec_statements(binf_path,csvf_path,"",result_csvf,table_size,devices=devs,buffer_size=0)
+        for buffers in [10,100,1000,10000]:
+            subprocess.call(["db2","alter bufferpool bp10 size %d"%buffers])
+            exec_statements("","",table_name,result_csvf,table_size,devices=devs,buffer_size=buffers)
         
     else:    
-        for tables in table_sizes:
-            print("Generating needed data for size %d"%tables)
-            csvf_path = "%sgen_%d.csv"%(wrk_dir,tables)
-            binf_path = "%sgen_%d.bin"%(wrk_dir,tables)
-            if force_generate or not os.path.exists(csvf_path) or not os.path.exists(binf_path):
-                subprocess.call([bin_dir+"/readcolordata","-gen=%d"%tables,"-files","-table-name=COLORS"])
+        for table_size in table_sizes:
+            csvf_path = "%sgen_%d.csv"%(wrk_dir,table_size)
+            binf_path = "%sgen_%d.bin"%(wrk_dir,table_size)
             
-            exec_statements(binf_path,csvf_path,table_name,result_csvf,tables,sanity_check=sanity,devices=devs)        
+            if not no_generate:
+                print("Generating needed data for size %d"%table_size)
+                subprocess.call([bin_dir+"/readcolordata","-gen=%d"%table_size,"-files","-table-name=COLORS"])
+                
+            exec_statements(binf_path,csvf_path,"",result_csvf,table_size,devices=devs,buffer_size=0)
+            for buffers in [10,100,1000,10000]:
+                subprocess.call(["db2","alter bufferpool bp10 size %d"%buffers])
+                exec_statements("","",table_name,result_csvf,table_size,devices=devs,buffer_size=buffers)        
 except:
     raise
 finally:
